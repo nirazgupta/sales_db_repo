@@ -1,0 +1,35 @@
+select t.name TableName, i.rows Records
+from sysobjects t, sysindexes i
+where t.xtype = 'U' and i.id = t.id and i.indid in (0,1)
+order by TableName;
+
+TableName			Records
+branch			7
+BRAND			3
+CATEGORY		4
+COMMISSION		297
+COMMISSION_AUDIT	2
+CUSTOMER		193
+DEPARTMENT		6	
+EMPLOYEE		112
+INVENTORY		10
+JOB_TITLE		9
+MONTHLY_COMMISSIONS	112
+ORDER_LINE		3077
+ORDERS			3077
+PHONE			4
+PROD_VEND_OL		6
+PROD_VEND_ORD		6
+PRODUCT		10
+PRODUCT_DISCOUNT	303
+PROMO_PRICE		5
+REGION			6
+RETURN_CATEGORY	6
+RETURNPROD		48
+salary			8
+shipping_method		7
+TAX			4
+VEND_SHIP		1
+VENDOR			3
+VENDOR_PRICE		3
+WAREHOUSE		3

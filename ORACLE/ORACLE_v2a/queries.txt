@@ -1,0 +1,248 @@
+CREATE SEQUENCE prod_vend_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle;
+
+CREATE SEQUENCE prod_vend_ol_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle; 
+
+CREATE SEQUENCE ven_ship_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle; 
+
+create or replace procedure sp_prod_vend_ord (
+  ORDER_DATE in DATE,
+    EXPECTED_SHIP_DATE in DATE,
+    TOTAL_COST in NUMBER,
+    VEND_ID in NUMBER,
+    PROD_ID in NUMBER,
+    QTY in NUMBER,
+    S_M_ID in NUMBER) is
+begin
+for a in (select QOH   from inventory where product_id=Prod_id )
+      loop
+        if(qty>a.QOH) then
+            INSERT INTO VEND_SHIP("VEND_SHIP_ID","VENDOR_ID","S_M_ID")
+			VALUES(ven_ship_countby1.NEXTVAL, VEND_ID, S_M_ID);
+            if (S_M_ID='1')  then
+            insert into prod_vend_ord values (prod_vend_countby1.NEXTVAL, order_date, EXPECTED_SHIP_DATE, order_date+3, TOTAL_COST, vend_ID);
+            else
+            insert into prod_vend_ord values (prod_vend_countby1.NEXTVAL, order_date, EXPECTED_SHIP_DATE, order_date+3, TOTAL_COST, vend_ID);
+            end if;
+            insert into prod_vend_ol values (prod_vend_ol_countby1.NEXTVAL, PROD_ID, 
+            (select max(pv_ord_id) from prod_vend_ord), qty);
+        else
+        update inventory
+        set QOH=(a.QOH+qty)
+        where Product_id=prod_id; 
+         --dbms_output.put_line(a.QOH-qty);
+        --select * from prodvendor;
+        --dbms_output.put_line('DOB1=');
+          end if;
+      end loop;
+end;
+/
+
+exec sp_prod_vend_ord ('07-NOV-03','01-NOV-03','5000','3','10','150','1');
+
+
+/*4.1	for each state (based on state customer address) with more than one employee helping customers,
+list state, number of orders, number of products ordered, total number of quantity ordered, and total sales*/
+
+select c.STREET_ADDRESS,count(ord.order_id) no_of_orders , count(p.product_id) no_of_products,
+count(ol.qty) total_no_of_qty, sum(ord.TOTAL) total_amount 
+from customer c inner join orders ord on ord.customer_id = c.CUSTOMER_id
+inner join order_line ol on ord.order_id = ol.order_id inner join product p
+on p.product_id = ol.product_id group by c.street_address having count(employee_id)>1 order by total_amount;
+
+/*
+"STREET_ADDRESS"              "NO_OF_ORDERS"                "NO_OF_PRODUCTS"              "TOTAL_NO_OF_QTY"             "TOTAL_AMOUNT"                
+"1201 Pennsylvania Ave"      		 "96"                          		"96"                         		 "96"                          "62"                          
+"1250 Harrinton Ave."        		 "62"                         		 "62"                         		 "62"                          "102"                         
+"Calonial Manor"              		"40"                          		"40"                         		 "40"                          "132"                         
+"140 East  Drive"             		"35"                          		"35"                          		"35"                          "150"                         
+"Mill Road"                   		"37"                          		"37"                         		 "37"                          "151"                         
+"RedFort Street"              		"43"                         		 "43"                         		 "43"                          "177"                         
+"11160 Veirs Mill Road"       		"21"                          		"21"                          		"21"                          "181"                         
+"HighLand Hill"              		 "30"                          		"30"                         		 "30"                          "201"                         
+"Bombay Street"               		"19"                          		"19"                         		 "19"                          "210"                                                 
+*/
+
+/*4.2 for each month, List the customer number, customer last name,
+with the highest total number of orders. Order your result from JAN to DEC.*/
+
+select a.LNAME, b.no_of_orders, b.month, b.customer_id from
+((select c.customer_id, c.LNAME from customer c) a
+inner join
+(select count(Order_id) no_of_orders, substr(ORDER_DATE,4,3) month,
+customer_id, rank()OVER(partition by substr(ORDER_DATE,4,3) order by count(Order_id) desc) rank
+from orders group by substr(ORDER_DATE,4,3), customer_id) b 
+on a.customer_id = b.customer_id
+) where rank=1 order by no_of_orders desc;
+
+/*
+"LNAME"                       "NO_OF_ORDERS"                "MONTH"                       "CUSTOMER_ID"                 
+"Harris"                      		"75"                      "MAY"                         	"39"                          
+"Stewart"                    		 "69"                     "JAN"                         		"94"                          
+"Constable"                   	"49"                          "NOV"                         	"23"                          
+"Dunn"                        		"42"                      "JUN"                        		 "28"                          
+"Mudd"                       		 "37"                     "FEB"                        		 "67"                          
+"Bullit"                      		"31"                      "APR"                         	"19"                          
+"George"                      		"31"                      "OCT"                        		 "32"                          
+"Stewart"                     		"29"                      "DEC"                         		"94"                          
+"Heisler"                     		"25"                      "SEP"                         		"40"                          
+"Jake"                        		"23"                      "AUG"                         	"143"                         
+"Blazek-White"                	"21"                         "MAR"                         	"15"                          
+"George"                      		"14"                      "JUL"                         	"133"                         
+
+*/
+
+/*4.3	for each state (based on customer state) list top three employees.
+Your list should include employee number, first name, last name, and total sales.*/
+
+select * from 
+(select b.employee_id, a.FNAME, a.LNAME, b.total,
+a.state_province, RANK() OVER ( partition by a.state_province ORDER BY b.total DESC) AS Top_Ranks
+from 
+((select e.employee_id, e.state_province, e.lname, e.fname from employee e) a
+inner join 
+(select employee_id, sum(subtotal) total  
+from orders
+group by employee_id
+having sum(subtotal) is not null 
+order by sum(subtotal) desc) b
+on a.employee_id = b.employee_id))
+where Top_Ranks <=3 order by total desc;
+
+/*
+"EMPLOYEE_ID"                 "FNAME"                       "LNAME"                       "TOTAL"                       "STATE_PROVINCE"              "TOP_RANKS"                   
+"9"                           		"James"                       "Holman"                      "1519410"                     	"DE"                          "1"                           
+"6"                           		"David"                       "Geriach"                     "983195"                      		"HI"                          "1"                           
+"13"                          		"James"                       "Wooton"                      "217130"                     	 	"MN"                          "1"                           
+"107"                         		"Peter"                       "Norman"                      "34490"                       		"MN"                          "2"                           
+"115"                         		"Robert "                     "Somers"                      "33518"                       		"MN"                          "3"                           
+"91"                          		"James"                       "Johnson"                     "19093"                      		 "VA"                          "1"                           
+"92"                          		"Doug"                        "Johnston"                    "15539"                      		 "DC"                          "1"                           
+"93"                          		"Sheela"                      "Katz"                        "15215"                      		 "DC"                          "2"                           
+"90"                         		 "Dusky"                       "Jenkins"                     "14052"                       		"DC"                          "3"                           
+"96"                         		 "John"                        "Mayfield"                    "10456"                       		"IL"                          "1"                           
+"108"                       		  "Donn"                        "Parker"                      "10086"                      		 "AZ"                          "1"                           
+"97"                          		"Doris"                       "McKissick"                   "9919"                        		"IL"                          "2"                           
+"111"                        		 "Agnes"                       "Pregmon"                     "9897"                        		"NV"                          "1"                           
+"95"                          		"Edward"                      "Martin"                      "9856"                       		 "IL"                          "3"                                      
+*/
+
+/*4.4	List top 25% of product sold (based on total quantity sold). 
+Your list should include product number, name, category, and total amount sold*/
+
+select b.qty,b.product_id, a.product_name, a.category_id from
+((select product_id, product_name, category_id from product ) a
+inner join 
+(select count(qty) qty,ol.product_id,rank() over(order by count(qty) desc) rank from order_line ol inner join product p
+on ol.product_id=p.product_id group by ol.product_id) b 
+on a.product_id=b.product_id)
+where rank< ((select count(*) from 
+(select count(qty) qty,ol.product_id,rank() over(order by count(qty) desc) rank from order_line ol inner join product p
+on ol.product_id=p.product_id group by ol.product_id))*25/100);
+/*
+"QTY"                         "PRODUCT_ID"                  "PRODUCT_NAME"                "CATEGORY_ID"                 
+"583"                         		"1"                           "42 inch Plasma TV"           	"1"                           
+"425"                        		 "8"          "Optical Desktop with Fingerprint Reader"	"3"                           
+
+*/
+
+/*4.5	Develop a list to a follow up call one month after the order date for orders more than $1,000.
+Your list should include the customer number and name, date of order, and date of follow up call*/
+
+select a.fname, a.lname, b.*, c.order_date, c.Follow_up_call_date
+from
+((select order_id, order_date, add_months(ORDER_DATE,1) Follow_up_call_date from orders ) c
+inner join
+(select count(order_id) totalorder,substr(add_months(ORDER_DATE,1),4,3) month,
+sum(orders.total) totalamount, order_id, customer_id
+from orders group by substr(add_months(ORDER_DATE,1),4,3), order_id, customer_id having sum(orders.total)>1000) b
+on c.order_id = b.order_id inner join
+(select c.customer_id,c.fname, c.lname from customer c) a 
+ on a.customer_id = b.customer_id);
+ 
+ /*RESULT*/
+ /*
+ "FNAME"                       "LNAME"                       "TOTALORDER"                  "MONTH"                       "TOTALAMOUNT"                 "ORDER_ID"                    "CUSTOMER_ID"                 "ORDER_DATE"                  "FOLLOW_UP_CALL_DATE"         
+" King"                       "Haag"                        "1"                           "MAR"                         "4600"                        "2062"                        "34"                          "09-FEB-05"                   "09-MAR-05"                   
+"Sehwag"                      "Hagen"                       "1"                           "DEC"                         "89400"                       "2769"                        "35"                          "09-NOV-04"                   "09-DEC-04"                   
+"Laral"                       "Brin"                        "1"                           "AUG"                         "4627"                        "3019"                        "120"                         "14-JUL-05"                   "14-AUG-05"                   
+"Stacy"                       "Dupont"                      "1"                           "AUG"                         "4680"                        "3021"                        "131"                         "14-JUL-05"                   "14-AUG-05"                   
+"John"                        "Johny"                       "1"                           "AUG"                         "4537"                        "3029"                        "150"                         "15-JUL-05"                   "15-AUG-05"                   
+"Claude"                      "Stansbury"                   "1"                           "AUG"                         "5111"                        "3047"                        "180"                         "30-JUL-05"                   "30-AUG-05"                   
+"Lara"                        "Jake"                        "1"                           "SEP"                         "4507"                        "3064"                        "143"                         "14-AUG-05"                   "14-SEP-05"                   
+"Colony"                      "George"                      "1"                           "AUG"                         "5004"                        "3069"                        "133"                         "31-JUL-05"                   "31-AUG-05"                   
+"Catherine"                   "Thomas"                      "1"                           "AUG"                         "5134"                        "3073"                        "185"                         "22-JUL-05"                   "22-AUG-05"                   
+"Sehwag"                      "Hagen"                       "1"                           "JAN"                         "27000"                       "1715"                        "35"                          "06-DEC-04"                   "06-JAN-05"                   
+"Sehwag"                      "Hagen"                       "1"                           "NOV"                         "98400"                       "2660"                        "35"                          "22-OCT-04"                   "22-NOV-04"                   
+"Sehwag"                      "Hagen"                       "1"                           "NOV"                         "102000"                      "2661"                        "35"                          "22-OCT-04"                   "22-NOV-04"                   
+
+ */
+
+ 
+ /*Q.5*/
+DECLARE
+    cursor a is 
+    select emp.employee_id as eid, emp.fname as ef, emp.lname as el, LTRIM(jt.job_title, ' ') as jobt,
+    sum(ord.total) as gross_sale
+    from employee emp join orders ord on emp.employee_id = ord.employee_id
+    join job_title jt on emp.job_title_id = jt.job_title_id
+    group by emp.employee_id, emp.fname, emp.lname, jt.job_title
+    having jt.job_title LIKE 'Sales%' ;
+  
+    cur_var a%rowtype;
+BEGIN
+OPEN a;
+        dbms_output.put_line('Employee ID    First Name  LAST NAME          JOB POSITION             Gross sale'); 
+        dbms_output.put_line('------------  ------------ ------------       ------------             ------------ ');
+for cnt_var in 1..20
+    LOOP          
+    fetch a into cur_var;
+        dbms_output.put_line(to_char(cnt_var)
+        ||'     '||RPAD(cur_var.eid,8,'-') 
+        ||'     '||RPAD(cur_var.ef ,8,'-')
+        ||'     '||RPAD(cur_var.el ,8,'-')
+        ||'     '||RPAD(cur_var.jobt ,20,'-')
+        ||'     '||RPAD(cur_var.gross_sale ,8,'-'));
+    END LOOP;
+    close a;
+END;
+/
+
+/*RESULT*/
+/*
+Employee ID    First Name  	LAST NAME          		JOB POSITION             Gross sale
+------------  ------------ 	------------       		------------             ------------ 
+1     58------     Ramond--     	Constabl     	Sales Representative     
+2     99------     Howard--     	McMillan     	Sales Representative     425-----
+3     74------     Charles-     	Bixler--     	Sales Representative     517-----
+4     66------     Judy----     	Holman--    	Sales Representative     
+5     47------     Doug----     	Johnston    	Sales Representative     
+6     40------     Michael-    	 Farmer--     		Sales Representative     
+7     56------     Thomas--     	Doering-     	Sales Representative     
+8     65------     Neil----     	Prouty--     	Sales Representative     
+9     51------     Donna---     	Reed----     	Sales Representative     
+10     53------     Charles-    	 Bixler--     	Sales Representative     
+11     57------     Albert--     	Widdes--     	Sales Representative     
+12     35------     John----     	Johnston    	Sales Manager-------     
+13     39------     Steven--     	Simmins-     	Sales Manager-------     
+14     95------     Edward--    	 Martin--     	Sales Representative     10034---
+15     72------     Dusky---     	Alan----     	Sales Representative     139-----
+16     60------     John----     	Mayfield     	Sales Representative     
+17     45------     Howard--     	McMillan     	Sales Representative     
+18     54------     Robert S     	Hanzdo--     	Sales Representative     
+19     41------     Willard-     	Doering-     	Sales Representative     
+20     67------     Claude--    	 Harris--     	Sales Representative     
+
+*/
+

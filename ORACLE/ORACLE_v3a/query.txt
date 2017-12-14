@@ -1,0 +1,293 @@
+CREATE TABLE MONTHLY_COMMISSIONS(
+    EMPLOYEE_ID NUMBER(10,0),
+    V_YEAR VARCHAR2(20),
+    V_MONTH VARCHAR2(20),
+    COMM_AMT NUMBER
+);
+/
+
+CREATE TABLE COMMISSION_AUDIT(
+    COM_AU_ID NUMBER(20),
+    EMPLOYEE_ID NUMBER(20),
+    ACTIVITY_DATE DATE,
+    ORIG_COMM_AMT NUMBER,
+    NEW_COMM_AMT NUMBER,
+    CONSTRAINT COM_AU_ID_PK PRIMARY KEY (COM_AU_ID),
+    CONSTRAINT COMMISSION_AUDIT_EMPLOYEE_FK FOREIGN KEY (EMPLOYEE_ID) REFERENCES EMPLOYEE (EMPLOYEE_ID)
+);
+/
+
+CREATE SEQUENCE prod_vend_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle;
+
+CREATE SEQUENCE prod_vend_ol_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle; 
+
+CREATE SEQUENCE ven_ship_countby1 
+    START WITH 6  
+    INCREMENT BY 1 
+    nocache
+    nocycle; 
+
+create or replace procedure sp_prod_vend_ord (
+  ORDER_DATE in DATE,
+    EXPECTED_SHIP_DATE in DATE,
+    TOTAL_COST in NUMBER,
+    VEND_ID in NUMBER,
+    PROD_ID in NUMBER,
+    QTY in NUMBER,
+    S_M_ID in NUMBER) is
+begin
+for a in (select QOH   from inventory where product_id=Prod_id )
+      loop
+        if(qty>a.QOH) then
+            INSERT INTO VEND_SHIP("VEND_SHIP_ID","VENDOR_ID","S_M_ID")
+			VALUES(ven_ship_countby1.NEXTVAL, VEND_ID, S_M_ID);
+            if (S_M_ID='1')  then
+            insert into prod_vend_ord values (prod_vend_countby1.NEXTVAL, order_date, EXPECTED_SHIP_DATE, order_date+3, TOTAL_COST, vend_ID);
+            else
+            insert into prod_vend_ord values (prod_vend_countby1.NEXTVAL, order_date, EXPECTED_SHIP_DATE, order_date+3, TOTAL_COST, vend_ID);
+            end if;
+            insert into prod_vend_ol values (prod_vend_ol_countby1.NEXTVAL, PROD_ID, 
+            (select max(pv_ord_id) from prod_vend_ord), qty);
+        else
+        update inventory
+        set QOH=(a.QOH+qty)
+        where Product_id=prod_id; 
+         --dbms_output.put_line(a.QOH-qty);
+        --select * from prodvendor;
+        --dbms_output.put_line('DOB1=');
+          end if;
+      end loop;
+end;
+/
+
+exec sp_prod_vend_ord ('07-NOV-03','01-NOV-03','5000','3','10','150','1');
+
+
+
+create sequence COMMISSION_AUDIT_SEQ
+start with 1
+increment by 1
+nocache
+nocycle;
+/
+CREATE OR REPLACE TRIGGER COMMISSION_AUDIT_TRIGGER
+AFTER UPDATE ON MONTHLY_COMMISSIONS 
+FOR EACH ROW
+DECLARE
+BEGIN
+    INSERT INTO COMMISSION_AUDIT 
+    VALUES(COMMISSION_AUDIT_SEQ.NEXTVAL, :NEW.EMPLOYEE_ID, SYSDATE, :OLD.COMM_AMT, :NEW.COMM_AMT);
+END;
+/
+	
+
+set serveroutput on;
+create or replace procedure calc_comm1(
+  EMP_ID in varchar2,
+  TOTAL_COMM out number
+)
+is
+V_COM number;
+LNAME varchar2(10);
+begin 
+for A in (select  SUM(TOTAL) as TOT from orders where employee_id = emp_id )
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      TOTAL_COMM := V_COM;      
+end;
+/
+
+set serveroutput on;
+create or replace procedure calc_comm2(
+  EMP_ID in varchar2,
+  v_year in number,
+  YEARLY_COMM out number
+)
+is
+V_COM number;
+begin 
+for a in (select  SUM(TOTAL) as TOT from orders 
+          where employee_id = EMP_ID and substr(order_date, 8, 2)= v_year)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;  
+      YEARLY_COMM := V_COM;    
+end;
+/
+
+set serveroutput on;
+create or replace procedure calc_comm3(
+  EMP_ID in varchar2,
+  vyear in varchar2,
+  vmonth in varchar2,
+  month_comm out number
+)
+is
+V_COM number;
+begin 
+for a in (select SUM(TOTAL) as TOT from orders 
+            where employee_id = EMP_ID 
+            and substr(order_date, 8, 2)= vyear 
+            and substr(order_date, 4, 3)= vmonth)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;  
+      month_comm := V_COM;
+end;
+/
+
+declare
+EMP_ID varchar2(20);
+EMP_LNAME varchar2(20);
+TOTAL_COMM number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('TOTAL COMISSION ' ,25));
+for a in (select distinct e.employee_id, e.lname 
+            from orders ord
+            join employee e on e.employee_id = ord.employee_id)
+loop
+calc_comm1(a.employee_id, TOTAL_COMM);
+dbms_output.put_line(
+                     RPAD(a.employee_id, 15) ||' '||
+                     RPAD(a.lname, 15)||' ' ||
+                     RPAD(TOTAL_COMM, 15));
+end loop;
+end;
+/
+
+declare
+EMP_ID varchar2(20);
+EMP_LNAME varchar2(20);
+YEARLY_COMM number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('YEAR ' ,15) || ' ' ||
+RPAD('COMISSION ' ,25));
+for a in (select distinct e.employee_id, substr(order_date, 8, 2) as vyear, e.lname
+          from orders ord join employee e
+          on ord.employee_id = e.employee_id)
+loop
+calc_comm2(a.employee_id, a.vyear, YEARLY_COMM);
+dbms_output.put_line(
+                     RPAD(a.employee_id, 15) ||' '||
+                     RPAD(a.lname, 15)||' ' ||
+                     RPAD(a.vyear, 15)||' ' ||
+                     RPAD(YEARLY_COMM, 15));
+end loop;
+end;
+/
+
+declare
+monthly_comm number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('YEAR ' ,15) || ' ' ||
+RPAD('MONTH ' ,15) || ' ' ||
+RPAD('COMISSION ' ,25));
+for a in (select distinct 
+            e.employee_id,
+            substr(order_date, 8, 2) as vyear,
+            substr(order_date, 4, 3) as vmonth,
+            e.l_name from orders ord join employee e
+            on ord.employee_id= e.employee_id)
+        loop
+        calc_comm3(a.employee_id, 
+                  a.vyear,
+                  a.vmonth,
+                  monthly_comm);
+        dbms_output.put_line(
+                            RPAD(a.employee_id, 15) ||' '||
+                            RPAD(a.l_name, 15)|| ' ' ||
+                            RPAD(a.vyear, 15)||' '||
+                            RPAD(a.vmonth, 15)||' ' ||
+                            RPAD(monthly_comm, 15));  
+
+        INSERT INTO MONTHLY_COMMISSIONS values(a.employee_id,
+                                               a.vyear, 
+                                               a.vmonth, 
+                                               monthly_comm);
+end loop;
+end;
+/
+
+set serveroutput on;
+create or replace function calc_comm_func(
+  EMP_ID in varchar2
+) return number is
+TOTAL_COMM number;
+V_COM number;
+begin 
+for A in (select  SUM(TOTAL) as TOT from orders where employee_id = emp_id )
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      TOTAL_COMM := V_COM;   
+      RETURN(TOTAL_COMM);
+end;
+/
+
+set serveroutput on;
+create or replace function calc_comm_func_year(
+  EMP_ID in varchar2,
+  vyear in number
+) return number is
+YEARLY_COMM number;
+V_COM number;
+begin 
+for A in (select  TOTAL as TOT from orders 
+          where employee_id = EMP_ID and substr(order_date, 8, 2)= vyear)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      YEARLY_COMM := V_COM;   
+      RETURN(YEARLY_COMM);
+end;
+/
+
+set serveroutput on;
+create or replace function calc_comm_func_month(
+  EMP_ID in varchar2,
+  vmonth in VARCHAR2
+) return number is
+MONTHLY_COMM number;
+V_COM number;
+begin 
+for A in (select  TOTAL as TOT from orders 
+          where employee_id = EMP_ID and substr(order_date, 4, 3)= vmonth)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      MONTHLY_COMM := V_COM;   
+      RETURN(MONTHLY_COMM);
+end;
+/
+
+SELECT 	
+    NVL(calc_comm_func(employee_id), 0) as "TOTAL_COMMISSION",
+    NVL(calc_comm_func_year(employee_id, 05), 0) as "2005_COMMISSION",
+    NVL(calc_comm_func_year(employee_id, 04), 0) as "2004_COMMISSION",
+    NVL(calc_comm_func_year(employee_id, 03), 0) as "2003_COMMISSION",
+    NVL(calc_comm_func_year(employee_id, 02), 0) as "2002_COMMISSION",
+    NVL(calc_comm_func_month(employee_id, 'FEB'), 0) as "FEB_COMMISSION",
+    NVL(calc_comm_func_month(employee_id, 'APR'), 0) as "APR_COMMISSION" 
+FROM employee;
+/
+
+
+

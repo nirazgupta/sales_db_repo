@@ -1,0 +1,259 @@
+/**Object Oriented**/
+
+/**Commission**/
+set serveroutput on;
+create or replace procedure O_calc_comm(
+  EMP_ID in O_employee.O_employee_id%type,
+  TOTAL_COMM out number
+)
+is
+V_COM number;
+L_NAME varchar2(10);
+begin 
+for A in (select  SUM(TOTAL) as TOT from O_orders where O_employee_id = emp_id )
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      TOTAL_COMM := V_COM;      
+end;
+/
+
+declare
+O_employee_id varchar2(20);
+EMP_LNAME varchar2(20);
+TOTAL_COMM number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('TOTAL COMISSION ' ,25));
+for a in (select distinct e.O_employee_id, e.employee.lname  lname
+            from O_orders ord
+            join O_employee e on e.O_employee_id = ord.O_employee_id)
+loop
+O_calc_comm(a.O_employee_id, TOTAL_COMM);
+dbms_output.put_line(
+                     RPAD(a.O_employee_id, 15) ||' '||
+                     RPAD(a.lname, 15)||' ' ||
+                     RPAD(TOTAL_COMM, 15));
+end loop;
+end;
+/
+
+select * from O_orders
+/**Yearly Commission**/
+
+set serveroutput on;
+create or replace procedure O_calc_comm_Yearly(
+  EMP_ID in O_employee.O_employee_id%type,
+  v_year in number,
+  YEARLY_COMM out number
+)
+is
+V_COM number;
+begin 
+for a in (select  SUM(subtotal) as TOT from O_orders 
+          where O_employee_id = EMP_ID and substr(order_date, 8, 2)= v_year)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;  
+      YEARLY_COMM := V_COM;    
+end;
+/
+
+
+declare
+EMP_ID O_employee.O_employee_id%type;
+EMP_LNAME varchar(50);
+YEARLY_COMM number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('YEAR ' ,15) || ' ' ||
+RPAD('COMISSION ' ,25));
+for a in (select distinct e.O_employee_id, substr(order_date, 8, 2) as vyear, e.employee.lname lname
+          from O_orders ord join O_employee e
+          on ord.O_employee_id = e.O_employee_id)
+loop
+O_calc_comm_Yearly(a.O_employee_id, a.vyear, YEARLY_COMM);
+dbms_output.put_line(
+                     RPAD(a.O_employee_id, 15) ||' '||
+                     RPAD(a.lname, 15)||' ' ||
+                     RPAD(a.vyear, 15)||' ' ||
+                     RPAD(YEARLY_COMM, 15));
+end loop;
+end;
+/
+
+
+/**Monthly Commission**/
+set serveroutput on;
+create or replace procedure O_calc_comm_Monthly(
+  EMP_ID in O_employee.O_employee_id%type,
+  vyear in varchar2,
+  vmonth in varchar2,
+  month_comm out number
+)
+is
+V_COM number;
+begin 
+for a in (select SUM(subtotal) as TOT from O_orders 
+            where O_employee_id = EMP_ID 
+            and substr(order_date, 8, 2)= vyear 
+            and substr(order_date, 4, 3)= vmonth)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;  
+      month_comm := V_COM;
+end;
+/
+
+CREATE TABLE O_MONTHLY_COMMISSIONS(
+    EMPLOYEE_ID NUMBER(10,0),
+    V_YEAR VARCHAR2(20),
+    V_MONTH VARCHAR2(20),
+    COMM_AMT NUMBER
+);
+/
+
+CREATE TABLE O_COMMISSION_AUDIT(
+    COM_AU_ID NUMBER(20),
+    O_EMPLOYEE_ID NUMBER,
+    ACTIVITY_DATE DATE,
+    ORIG_COMM_AMT NUMBER,
+    NEW_COMM_AMT NUMBER,
+    CONSTRAINT O_COM_AU_ID_PK PRIMARY KEY (COM_AU_ID),
+    CONSTRAINT O_COMMISSION_AUDIT_EMPLOYEE_FK FOREIGN KEY (O_EMPLOYEE_ID) REFERENCES O_EMPLOYEE (O_EMPLOYEE_ID)
+);
+/
+
+create sequence O_COMMISSION_AUDIT_SEQ
+start with 1
+increment by 1
+nocache
+nocycle;
+/
+
+
+declare
+monthly_comm number;
+begin
+DBMS_OUTPUT.PUT_LINE(
+RPAD('EMPLOYEE # ' ,15) || ' ' ||
+RPAD('LAST NAME ' ,15) || ' ' ||
+RPAD('YEAR ' ,15) || ' ' ||
+RPAD('MONTH ' ,15) || ' ' ||
+RPAD('COMISSION ' ,25));
+for a in (select distinct 
+            e.O_EMPLOYEE_ID,
+            substr(order_date, 8, 2) as vyear,
+            substr(order_date, 4, 3) as vmonth,
+            e.employee.lname lname from O_orders ord join O_employee e
+            on ord.O_EMPLOYEE_ID= e.O_EMPLOYEE_ID)
+        loop
+        O_calc_comm_Monthly(a.O_EMPLOYEE_ID, 
+                  a.vyear,
+                  a.vmonth,
+                  monthly_comm);
+        dbms_output.put_line(
+                            RPAD(a.O_EMPLOYEE_ID, 15) ||' '||
+                            RPAD(a.lname, 15)|| ' ' ||
+                            RPAD(a.vyear, 15)||' '||
+                            RPAD(a.vmonth, 15)||' ' ||
+                            RPAD(monthly_comm, 15));  
+
+        INSERT INTO O_MONTHLY_COMMISSIONS values(a.O_EMPLOYEE_ID,
+                                               a.vyear, 
+                                               a.vmonth, 
+                                               monthly_comm);
+end loop;
+end;
+/
+
+select * from O_MONTHLY_COMMISSIONS;
+
+/**Function**/
+
+set serveroutput on;
+create or replace function O_calc_comm_func(
+  EMP_ID in varchar2
+) return number is
+TOTAL_COMM number;
+V_COM number;
+begin 
+for A in (select  SUM(total) as TOT from O_orders where O_EMPLOYEE_ID = emp_id )
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      TOTAL_COMM := V_COM;   
+      RETURN(TOTAL_COMM);
+end;
+/
+
+
+set serveroutput on;
+create or replace function O_calc_comm_func_year(
+  EMP_ID in varchar2,
+  vyear in number
+) return number is
+YEARLY_COMM number;
+V_COM number;
+begin 
+for A in (select  subtotal as TOT from O_orders 
+          where O_EMPLOYEE_ID = EMP_ID and substr(order_date, 8, 2)= vyear)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      YEARLY_COMM := V_COM;   
+      RETURN(YEARLY_COMM);
+end;
+/
+
+set serveroutput on;
+create or replace function O_calc_comm_func_month(
+  EMP_ID in varchar2,
+  vmonth in VARCHAR2
+) return number is
+MONTHLY_COMM number;
+V_COM number;
+begin 
+for A in (select  subtotal as TOT from O_orders 
+          where O_EMPLOYEE_ID = EMP_ID and substr(order_date, 4, 3)= vmonth)
+      loop
+      V_COM := a.TOT * 0.05;
+      end loop;   
+      MONTHLY_COMM := V_COM;   
+      RETURN(MONTHLY_COMM);
+end;
+/
+
+SELECT
+    NVL(O_calc_comm_func(O_EMPLOYEE_ID), 0) as "TOTAL_COMMISSION",
+    NVL(O_calc_comm_func_year(O_EMPLOYEE_ID, 05), 0) as "2005_COMMISSION",
+    NVL(O_calc_comm_func_year(O_EMPLOYEE_ID, 04), 0) as "2004_COMMISSION",
+    NVL(O_calc_comm_func_year(O_EMPLOYEE_ID, 03), 0) as "2003_COMMISSION",
+    NVL(O_calc_comm_func_year(O_EMPLOYEE_ID, 02), 0) as "2002_COMMISSION",
+    NVL(O_calc_comm_func_month(O_EMPLOYEE_ID, 'FEB'), 0) as "FEB_COMMISSION",
+    NVL(O_calc_comm_func_month(O_EMPLOYEE_ID, 'APR'), 0) as "APR_COMMISSION" 
+FROM O_employee;
+/
+
+
+CREATE OR REPLACE TRIGGER O_COMMISSION_AUDIT_TRIGGER
+AFTER UPDATE ON O_MONTHLY_COMMISSIONS 
+FOR EACH ROW
+DECLARE
+BEGIN
+    INSERT INTO O_COMMISSION_AUDIT 
+    VALUES(COMMISSION_AUDIT_SEQ.NEXTVAL, :NEW.EMPLOYEE_ID, SYSDATE, :OLD.COMM_AMT, :NEW.COMM_AMT);
+END;
+/
+
+--select * from O_MONTHLY_COMMISSIONS;
+
+update O_MONTHLY_COMMISSIONS
+set comm_amt='12345'
+where employee_id='5';
+
+--select * from O_COMMISSION_AUDIT;

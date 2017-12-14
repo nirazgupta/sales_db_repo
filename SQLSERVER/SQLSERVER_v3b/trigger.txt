@@ -1,0 +1,72 @@
+create sequence commission_audit_sq
+start with 1
+increment by 1;
+GO
+
+create procedure [dbo].[commission_monthly_insert]
+as
+begin
+declare @count int,@MONTHLY_COMM numeric;
+set @count=(select count(*) from Employee);
+declare @pointer int;
+set @pointer=1;
+DECLARE @Employee TABLE
+(
+  ID int identity(1,1), 
+  employee_id varchar(50),
+  months varchar(50),
+  years varchar(50)
+)
+
+declare @emp table
+(
+employee_id varchar(50),
+lname varchar(50),
+months varchar(50),
+years varchar(50),
+commission numeric
+)
+INSERT INTO @Employee (employee_id,months,years)
+  select EMPLOYEE_id,datename(MONTH, order_date),RIGHT(YEAR(order_date), 2)  
+  from orders group by RIGHT(YEAR(order_date), 2),EMPLOYEE_ID, datename(MONTH, order_date);
+
+  --select  @count;
+while(@pointer<=@count)
+begin
+--select  @pointer;
+declare @emp_id varchar(50),@v_year  varchar(50),@v_month varchar(50),
+@lname varchar(50),@commission numeric;
+set @emp_id=(select employee_id from @Employee where ID=@pointer);
+set @lname =(select LNAME from Employee where EMPLOYEE_ID=@emp_id);
+set @v_year=(select years from @Employee where ID=@pointer);
+set @v_month=(select months from @Employee where ID=@pointer);
+exec  calc_comm_month @emp_id ,@v_year,@v_month, @MONTHLY_COMM=@MONTHLY_COMM output;
+--insert into @emp values (@emp_id,@lname,@v_month,@v_year,@MONTHLY_COMM);
+insert into [dbo].[monthly_commissions] values (@emp_id,@v_year,@v_month,@MONTHLY_COMM);
+set @pointer=@pointer+1;
+end
+end
+GO
+
+exec commission_monthly_insert;
+GO
+
+create trigger commission_audit_trigger
+on [monthly_commissions]
+for update 
+as
+begin
+	DECLARE @commission INT,@emp_no varchar(50),@comm varchar(50);
+	SELECT @commission = NEXT VALUE FOR commission_audit_sq;
+	--set @emp_no =(select employee_no from inserted);
+
+	insert into [dbo].[commission_audit] 
+	values (@commission,(select EMPLOYEE_ID from inserted),GETDATE(),
+	(select comm_amt from deleted),(select comm_amt from inserted));
+end
+GO
+
+update monthly_commissions
+set COMM_AMT='123'
+where EMPLOYEE_ID='19'
+

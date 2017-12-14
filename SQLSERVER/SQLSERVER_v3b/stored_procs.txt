@@ -1,0 +1,260 @@
+CREATE SEQUENCE prod_vend_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+CREATE SEQUENCE prod_vend_ol_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+CREATE SEQUENCE vend_ship_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+CREATE PROC sp_prod_vend_ord
+    @ORDER_DATE DATETIME2,
+    @EXPECTED_SHIP_DATE DATETIME2,
+    @TOTAL_COST NUMERIC(15),
+    @VENDOR_ID NUMERIC(15),
+    @PRODUCT_ID NUMERIC(15),
+    @QTY NUMERIC(15),
+    @S_M_ID NUMERIC(15)
+AS
+BEGIN
+    BEGIN TRY
+		begin transaction;
+			DECLARE @PV_ORD_ID INT;
+			DECLARE @PV_OL_ID INT;
+			DECLARE @VEND_SHIP_ID INT;
+			DECLARE @SHIPPED_DATE DATETIME2;
+			SELECT @PV_ORD_ID = NEXT VALUE FOR prod_vend_countby1;
+			SELECT @PV_OL_ID = NEXT VALUE FOR prod_vend_ol_countby1 ;
+			SELECT @VEND_SHIP_ID = NEXT VALUE FOR vend_ship_countby1 ;
+			
+			INSERT INTO VEND_SHIP("VEND_SHIP_ID","VENDOR_ID","S_M_ID")
+			VALUES(@VEND_SHIP_ID, @VENDOR_ID, @S_M_ID);
+
+			IF @S_M_ID = 1
+				SET @SHIPPED_DATE = DATEADD(day,3,@ORDER_DATE);
+
+			insert into prod_vend_ord("PV_ORD_ID", "ORDER_DATE", "EXPECTED_SHIP_DATE", "SHIPPED_DATE", "TOTAL_COST", "VENDOR_ID")
+			VALUES(@PV_ORD_ID , @ORDER_DATE, @EXPECTED_SHIP_DATE, @SHIPPED_DATE, @TOTAL_COST, @VENDOR_ID);
+
+			INSERT INTO PROD_VEND_OL("PV_OL_ID", "PRODUCT_ID", "PV_ORD_ID", "QTY")
+			VALUES(@PV_OL_ID, @PRODUCT_ID, @PV_OL_ID, @QTY);
+
+			DECLARE @QNTY NUMERIC(15);
+			SET @QNTY = (SELECT QOH FROM INVENTORY WHERE PRODUCT_ID = @PRODUCT_ID);
+			
+			update INVENTORY
+			SET QOH = @QNTY + @QTY
+			WHERE PRODUCT_ID = @PRODUCT_ID
+	       
+	   commit transaction;
+	END TRY
+	BEGIN CATCH
+	  DECLARE 	@ErrorNo 	int,
+   		        @Message	nvarchar(4000)
+     SELECT
+   	    @ErrorNo 	= ERROR_NUMBER(),
+   	    @Message 	= ERROR_MESSAGE()
+		RAISERROR (@Message, 16, 1);
+		rollback transaction;
+	END CATCH;
+END
+GO
+
+EXEC sp_prod_vend_ord
+    @ORDER_DATE = '07-MAY-03',
+    @EXPECTED_SHIP_DATE = '10-MAY-03',
+    @TOTAL_COST = '12000',
+    @VENDOR_ID = '3',
+    @PRODUCT_ID = '8',
+    @QTY = '200',
+    @S_M_ID = '1';
+
+	
+CREATE  procedure proc_calc_comm_tot
+  @EMP_ID nvarchar(50),
+  @TOTAL_COMM  numeric output
+as
+begin
+declare @subtotal int;
+     set @subtotal=(select  SUM(cast(total as numeric)) as TOT from orders where employee_id = @EMP_ID);
+select @TOTAL_COMM= @subtotal*0.05;
+end;
+
+
+
+create procedure calc_comm_tot_driver
+as
+begin
+declare @count int,@TOTAL_COMM numeric;
+set @count=(select count(*) from Employee);
+declare @counter int;
+set @counter=1;
+DECLARE @Employee TABLE
+(
+  ID int identity(1,1), 
+  employee_id varchar(50),
+  EMP_FNAME varchar(200),
+  EMP_LNAME varchar(200),
+  EMP_ST varchar(200),
+  EMP_CITY varchar(200),
+  EMPLOYEETITLE_ID varchar(200)
+)
+
+declare @emp table
+(
+employee_id varchar(50),
+lname varchar(50),
+commission numeric
+)
+INSERT INTO @Employee (employee_id, EMP_FNAME,EMP_LNAME,EMP_ST,EMP_CITY,EMPLOYEETITLE_ID)
+  SELECT EMPLOYEE_ID, FNAME, LNAME, STATE_PROVINCE, CITY, JOB_TITLE_ID from Employee;
+
+while(@counter<=@count)
+begin
+--select  @counter;
+declare @emp_id varchar(50),
+@lname varchar(50),@commission numeric;
+set @emp_id=(select employee_id from @Employee where ID=@counter);
+set @lname =(select EMP_LNAME from @Employee where ID=@counter);
+exec  proc_calc_comm_tot @emp_id , @TOTAL_COMM=@TOTAL_COMM output;
+insert into @emp values (@emp_id,@lname,@TOTAL_COMM);
+set @counter=@counter+1;
+end
+
+select * from @emp;
+end;
+
+exec calc_comm_tot_driver;
+
+
+/********Yearly Commission**********/
+
+create  procedure calc_comm_year(
+  @EMP_ID nvarchar(50),
+  @v_year  varchar(50),
+  @YEARLY_COMM numeric output
+)
+as
+begin
+declare @subtotal int;
+
+  set @subtotal=(select  SUM(cast(total as numeric)) as TOT from orders where employee_id = @EMP_ID 
+  and RIGHT(YEAR(order_date), 2)= @v_year);
+select @YEARLY_COMM= @subtotal*0.05;
+     
+end;
+
+
+create procedure commission_yearly
+as
+begin
+declare @count int,@YEARLY_COMM numeric;
+set @count=(select count(*) from Employee);
+declare @counter int;
+set @counter=1;
+DECLARE @Employee TABLE
+(
+  ID int identity(1,1), 
+  employee_id varchar(50),
+  years varchar(50)
+)
+
+declare @emp table
+(
+employee_id varchar(50),
+lname varchar(50),
+years varchar(50),
+commission numeric
+)
+INSERT INTO @Employee (employee_id,years)
+  select EMPLOYEE_id,RIGHT(YEAR(order_date), 2) from orders group by RIGHT(YEAR(order_date), 2),EMPLOYEE_id ;
+
+while(@counter<=@count)
+begin
+declare @emp_id varchar(50),@v_year  varchar(50),
+@lname varchar(50),@commission numeric;
+set @emp_id=(select employee_id from @Employee where ID=@counter);
+set @lname =(select LNAME from Employee where EMPLOYEE_ID=@emp_id);
+set @v_year=(select years from @Employee where ID=@counter);
+exec  calc_comm_year @emp_id ,@v_year, @YEARLY_COMM=@YEARLY_COMM output;
+insert into @emp values (@emp_id,@lname,@v_year,@YEARLY_COMM);
+set @counter=@counter+1;
+end
+
+select * from @emp where employee_id is not null;
+end;
+
+exec commission_yearly;
+
+
+
+/********Monthly Commission***********/
+
+create  procedure f_calc_comm_monthly(
+  @EMP_ID nvarchar(50),
+  @v_year  varchar(50),
+  @v_month varchar(50),
+  @MONTHLY_COMM numeric output
+)
+as
+begin
+declare @subtotal int;
+
+  set @subtotal=(select  SUM(cast(TOTAL as numeric)) as TOT from orders where employee_id = @EMP_ID 
+  and RIGHT(YEAR(order_date), 2)= @v_year and datename(MONTH, order_date)= @v_month);
+select @MONTHLY_COMM= @subtotal*0.05;
+     
+end;
+
+
+
+create procedure commission_monthly
+as
+begin
+declare @count int,@MONTHLY_COMM numeric;
+set @count=(select count(*) from Employee);
+declare @counter int;
+set @counter=1;
+DECLARE @Employee TABLE
+(
+  ID int identity(1,1), 
+  employee_id varchar(50),
+  months varchar(50),
+  years varchar(50)
+)
+
+declare @emp table
+(
+employee_id varchar(50),
+lname varchar(50),
+months varchar(50),
+years varchar(50),
+commission numeric
+)
+INSERT INTO @Employee (employee_id,months,years)
+  select EMPLOYEE_id,datename(MONTH, order_date),RIGHT(YEAR(order_date), 2)  
+  from orders group by RIGHT(YEAR(order_date), 2),EMPLOYEE_ID, datename(MONTH, order_date);
+
+while(@counter<=@count)
+begin
+declare @emp_id varchar(50),@v_year  varchar(50),@v_month varchar(50),
+@lname varchar(50),@commission numeric;
+set @emp_id=(select employee_id from @Employee where ID=@counter);
+set @lname =(select LNAME from Employee where EMPLOYEE_ID=@emp_id);
+set @v_year=(select years from @Employee where ID=@counter);
+set @v_month=(select months from @Employee where ID=@counter);
+exec  f_calc_comm_monthly @emp_id ,@v_year,@v_month, @MONTHLY_COMM=@MONTHLY_COMM output;
+insert into @emp values (@emp_id,@lname,@v_month,@v_year,@MONTHLY_COMM);
+set @counter=@counter+1;
+end
+
+select * from @emp where employee_id is not null;
+end;
+
+exec commission_monthly;

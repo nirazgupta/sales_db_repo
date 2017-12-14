@@ -1,0 +1,32 @@
+select t.name TableName, i.rows Records
+from sysobjects t, sysindexes i
+where t.xtype = 'U' and i.id = t.id and i.indid in (0,1)
+order by TableName;
+
+TableName			Records
+BRANCH			7
+BRAND			3
+CATEGORY		4
+CUSTOMER		106
+DEPARTMENT		6
+DEPT_EMP		0
+EMPLOYEE		70
+INVENTORY		10
+INVOICE			0
+JOB_HISTORY		0
+JOB_TITLE		9
+ORDER_LINE		2780
+ORDERS			2780
+PHONE			2
+PROD_VEND_OL		7
+PROD_VEND_ORD		7
+PRODUCT		10
+PRODUCT_DISCOUNT	6
+PROMO_PRICE		5
+REGION			6
+REGION_STATE		0
+SALARY			8	
+VEND_SHIP		7
+VENDOR			3
+VENDOR_PRICE		3
+WAREHOUSE		3

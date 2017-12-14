@@ -1,0 +1,79 @@
+/**User Define Function**/
+
+CREATE FUNCTION f_calc_comm_tot(@EMP_ID nvarchar(50))  
+RETURNS numeric   
+AS   
+BEGIN  
+    declare @subtotal int;
+     set @subtotal=(select  SUM(cast(total as numeric)) as TOT
+	 from orders where employee_id = @EMP_ID);
+	 return @subtotal*0.05; 
+END; 
+
+
+
+
+
+/**Yearly Commission**/
+
+create  FUNCTION f_calc_comm_year(
+  @EMP_ID nvarchar(50),
+  @v_year  varchar(50))
+  RETURNS numeric  
+as
+begin
+declare @subtotal int;
+
+	  set @subtotal=(select  SUM(cast(total as numeric)) as Yearly_COMM
+	  from orders where employee_id = @EMP_ID 
+	  and RIGHT(YEAR(order_date), 2)= @v_year);
+	 return @subtotal*0.05;
+	     
+end;
+
+
+ /**Monthly Commission**/
+
+create  FUNCTION f_calc_comm_monthly(
+  @EMP_ID nvarchar(50),
+  @v_year  varchar(50),
+  @v_month varchar(50))
+  RETURNS numeric
+as
+begin
+declare @subtotal int;
+
+	  set @subtotal=(select  SUM(cast(total as numeric)) as TOT from orders where employee_id = @EMP_ID 
+	  and RIGHT(YEAR(order_date), 2)= @v_year and datename(MONTH, order_date)= @v_month);
+	 return @subtotal*0.05;
+	     
+end;
+
+/*
+--select EMPLOYEE_ID,dbo.f_calc_comm_tot(EMPLOYEE_ID) as 'total commission' from Employee;
+
+--select employee_id,RIGHT(YEAR(order_date), 2) year,
+--dbo.f_calc_comm_year(employee_id,RIGHT(YEAR(order_date), 2)) as 'yearly commission'
+-- from orders group by RIGHT(YEAR(order_date), 2),
+-- employee_id,dbo.f_calc_comm_year(employee_id,RIGHT(YEAR(order_date), 2)) ;
+ 
+--select employee_id,datename(MONTH, order_date),RIGHT(YEAR(order_date), 2) ,
+--dbo.f_calc_comm_monthly(employee_id,RIGHT(YEAR(order_date), 2),datename(MONTH, order_date)) as 'total commission' 
+--from orders group by RIGHT(YEAR(order_date), 2),employee_id, datename(MONTH, order_date),
+--dbo.f_calc_comm_monthly(employee_id,RIGHT(YEAR(order_date), 2),datename(MONTH, order_date));
+*/
+
+ select orders.EMPLOYEE_ID,dbo.f_calc_comm_tot(orders.EMPLOYEE_ID) as 'total commission',
+		 orders.employee_id,RIGHT(YEAR(order_date), 2) as year,
+		 dbo.f_calc_comm_year(orders.employee_id,RIGHT(YEAR(order_date), 2)) as 'yearly commission',
+		 datename(MONTH, order_date) month,RIGHT(YEAR(order_date), 2) ,
+		dbo.f_calc_comm_monthly(orders.employee_id,RIGHT(YEAR(order_date), 2),
+		datename(MONTH, order_date)) as 'Monthly commission'
+ from Employee join ORDERS on orders.EMPLOYEE_ID = EMPLOYEE.EMPLOYEE_ID
+ group by orders.EMPLOYEE_ID,dbo.f_calc_comm_tot(orders.EMPLOYEE_ID),
+		 orders.employee_id,RIGHT(YEAR(order_date), 2),
+		 dbo.f_calc_comm_year(orders.employee_id,RIGHT(YEAR(order_date), 2)),
+		 datename(MONTH, order_date),RIGHT(YEAR(order_date), 2) ,
+		dbo.f_calc_comm_monthly(orders.employee_id,RIGHT(YEAR(order_date), 2),
+		datename(MONTH, order_date))
+order by orders.EMPLOYEE_ID desc;

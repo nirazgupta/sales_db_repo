@@ -1,0 +1,135 @@
+2.1	Using your database, list the position title and number of employees in each position title. You should get the following results
+POSITION Title COUNT
+
+--QUERY--
+select j.job_title, COUNT(e.employee_id) AS Num_of_Employees
+from employee e 
+join job_title j on j.job_title_id = e.job_title_id
+group by j.job_title
+
+--RESULT--
+"JOB_TITLE"                   "NUM_OF_EMPLOYEES"            
+"Sales Representative"        	"52"                          
+"Programmer"                  	"6"                           
+"Technician"                 		"3"                           
+"Branch Manager"             	 "30"                          
+"Customer Service"            	"17"                          
+"Accountant"                  	"4"                           
+"CEO"                         		"1"                           
+"Customer Service Manager"    	"2"                           
+"Sales Manager"               	"7"                           
+
+
+2.2	Using your database, for each customer list the following information.
+CUSTOMER_NO LNAME TOTAL_ORDERS TOTAL_PRODUCTS GROSS_SALES TOTAL_SHIPPING_COST TOTAL_TAX
+Let’s assume shipping charge is 2% of gross sales and tax is 7.5% of gross sale
+
+--QUERY--
+select ord.customer_id, c.LNAME,c.FNAME, COUNT(ord.order_ID), count(ol.product_id), NVL(ord.subtotal,0),
+NVL(ord.shipping_charge,0) AS TOTAL_SHIPPING, NVL((t.tax_percent * ord.subtotal),0) as TAX
+from customer c join orders ord on c.customer_id = ord.customer_id
+join order_line ol on ord.order_id = ol.order_id
+join TAX t on t.tax_id = ord.tax_id
+group by ord.customer_id, c.Lname,c.FNAME, ord.subtotal, ord.shipping_charge, (t.tax_percent * ord.subtotal);
+
+--SAMPLE RESULT--
+"CUSTOMER_ID"                 "LNAME"                       "FNAME"                       "COUNT(ORD.ORDER_ID)"         "COUNT(OL.PRODUCT_ID)"        "NVL(ORD.SUBTOTAL,0)"         "TOTAL_SHIPPING"              "TAX"                         
+"72"                         		 "Nilson"                      "George"                      		"13"                          		"13"                          		"0"                          		 "0"                           "0"                           
+"34"                          		"Haag"                        " King"                       		"1"                           		"1"                           		"4000"                       		 "200"                         "320"                         
+"35"                          		"Hagen"                       "Sehwag"                    		  "1"                          		"1"                           		"72000"                      		 "2000"                        "5760"                        
+"35"                          		"Hagen"                       "Sehwag"                    		  "1"                          		 "1"                          		 "40000"                       	"3600"                        "3200"                        
+"50"                          		"Johny"                       "John"                        		"14"                          		"14"                         		 "0"                           		"0"                           "0"                           
+"73"                          		"Parker"                      "Willard"                    		 "40"                          		"40"                          		"0"                           		"0"                           "0"                           
+"86"                          		"Shahid"                      "Afridi"                      		"43"                         		 "43"                          		"0"                          		 "0"                           "0"                           
+"89"                         		 "Somers"                      "Peter"                      		 "27"                          		"27"                          		"0"                           		"0"                           "0"                           
+"32"                          		"George"                      "Colony"                      		"48"                         		 "48"                         		 "0"                          		 "0"                           "0"                           
+"45"                         		 "James"                       "Ripkin"                      		"24"                         		 "24"                         		 "0"                          		 "0"                           "0"                           
+"84"                        		  "Sachin"                      " Tendulkar"                  	"17"                         		 "17"                         		 "0"                          		 "0"                           "0"                           
+
+
+2.3 Using your database, List customer number and their orders based on days of the week. You should get the following results
+    CUSTOMER_NO ORDER_NO gross_Sale
+--QUERY--
+select customer_id,order_id, NVL(subtotal,0) AS GROSS_SALE,
+trim(TO_CHAR(order_date, 'DY')) AS DAY_OF_WEEK
+from orders 
+order by subtotal asc nulls last;
+
+--SAMPLE RESULT--
+"CUSTOMER_ID"                 "ORDER_ID"                    "GROSS_SALE"                  "DAY_OF_WEEK"                 
+"143"                         		"2797"                        "51"                          		"SAT"                         
+"113"                         		"2841"                        "51"                          		"TUE"                         
+"125"                        		 "2837"                        "51"                         		 "TUE"                         
+"151"                         		"2832"                        "51"                         		 "TUE"                         
+"174"                         		"2818"                        "51"                         		 "THU"                         
+"118"                         		"2817"                        "51"                         		 "WED"                         
+"107"                        		 "2810"                        "51"                        		  "WED"                         
+"151"                        		 "2802"                        "51"                        		  "WED"                         
+"147"                         		"2907"                        "51"                          		"MON"                         
+"114"                         		"2904"                        "51"                         		 "MON"                         
+"122"                         		"2872"                        "51"                        		  "THU"                         
+"193"                         		"2871"                        "51"                         		 "THU"                         
+"172"                        		 "2865"                        "51"                        		  "WED"                         
+"143"                         		"2949"                        "51"                        		  "TUE"                         
+"120"                         		"2944"                        "51"                        		  "SUN"                         
+"138"                         		"2937"                        "51"                         		 "SUN"                         
+"143"                         		"2906"                        "53"                          		"MON"                         
+"168"                         		"2793"                        "54"                         		 "SAT"                         
+"166"                        		 "2927"                        "56"                       		   "SAT"                         
+                       
+
+
+2.4 Using your database, for every employee (employee number, first name, last name)
+list their total sales for each product that they have sold. You should get the following results
+
+EMPLOYEE_NO FNAME LNAME PRODUCT_NO PRODUCT_SOLD
+--QUERY--
+select ord.employee_id, e.fname, e.lname, p.product_id, p.product_name
+from orders ord join employee e on ord.employee_id = e.employee_id
+join order_line ol on ol.order_id = ord.order_id
+join product p on ol.product_id = p.product_id
+group by ord.employee_id, e.fname, e.lname, p.product_id, p.product_name;
+
+--SAMPLE RESULT--
+"EMPLOYEE_ID"                 "FNAME"                       "LNAME"                       "PRODUCT_ID"                  "PRODUCT_NAME"                
+"20"                          		" Stefan"                     "Wyatt"                       "5"                           		"Xbox controller"             
+"21"                          		"Hubert"                      "Wright"                      "8"                           		"Optical Desktop with Fingerprint Reader"
+"22"                          		"Dusky"                       "Jenkins"                     "7"                           		"Xbox,2 controller, 1 Mario game,2 memory cards"
+"22"                          		"Dusky"                       "Jenkins"                     "5"                          		 "Xbox controller"             
+"22"                          		"Dusky"                       "Jenkins"                     "4"                           		"Xbox"                        
+"24"                         		 "Doris"                       "Adams"                       "6"                          		 "Xbox Memeory Card"           
+"24"                          		"Doris"                       "Adams"                       "3"                           		"Mario Game for Xbox"         
+"25"                          		"Charles"                     "Keting"                      "5"                          		 "Xbox controller"             
+"1"                          		 "Eugenia"                     "Dunn"                        "5"                         		  "Xbox controller"             
+"4"                          		 "Catherine"                   "Beckley"                     "8"                           		"Optical Desktop with Fingerprint Reader"
+"4"                          		 "Catherine"                   "Beckley"                     "9"                           		"Office Professional Edition 2003"
+"7"                          		 "Lee"                         "Forman"                      "2"                          		 "42 inch Plasma TV"           
+"7"                          		 "Lee"                         "Forman"                      "4"                          		 "Xbox"                        
+"8"                          		 "Donald"                      "Wright"                      "1"                           		"42 inch Plasma TV"           
+"8"                           		"Donald"                      "Wright"                      "2"                          		 "42 inch Plasma TV"           
+            
+
+
+2.5 Using your database, for every state, select top customer
+number with the highest number of orders. You should get the following results
+CUSTOMER_NO COUNT_ORDERS State
+
+--QUERY--
+select ord.customer_id, count(ord.order_id) AS num_of_orders, c.state_province
+from orders ord join customer c on c.customer_id = ord.customer_id
+group by ord.customer_id, c.state_province
+having c.state_province IS NOT NULL
+order by count(ord.order_id) DESC;
+
+--RESULT--
+"CUSTOMER_ID"                 "NUM_OF_ORDERS"               "STATE_PROVINCE"              
+"20"                          		"50"                          		"MN"                          
+"8"                          		 "40"                          		"MN"                          
+"14"                         		 "26"                         		 "WI"                          
+"113"                         		"12"                         		"MN"                          
+"147"                         		"10"                         		"MN"                          
+
+
+
+
+
