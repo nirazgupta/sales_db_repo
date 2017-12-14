@@ -1,0 +1,209 @@
+/*Q.2.2*/
+CREATE SEQUENCE prod_vend_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+CREATE SEQUENCE prod_vend_ol_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+CREATE SEQUENCE ven_ship_countby1 
+    START WITH 6  
+    INCREMENT BY 1 ;  
+GO  
+
+ALTER PROC sp_prod_vend_ord
+    @ORDER_DATE DATETIME2,
+    @EXPECTED_SHIP_DATE DATETIME2,
+    @TOTAL_COST NUMERIC(15),
+    @VENDOR_ID NUMERIC(15),
+    @PRODUCT_ID NUMERIC(15),
+    @QTY NUMERIC(15),
+    @S_M_ID NUMERIC(15)
+AS
+BEGIN
+    BEGIN TRY
+		begin transaction;
+			DECLARE @PV_ORD_ID INT;
+			DECLARE @PV_OL_ID INT;
+			DECLARE @VEND_SHIP_ID INT;
+			DECLARE @SHIPPED_DATE DATETIME2;
+			SELECT @PV_ORD_ID = NEXT VALUE FOR prod_vend_countby1;
+			SELECT @PV_OL_ID = NEXT VALUE FOR prod_vend_ol_countby1 ;
+			SELECT @VEND_SHIP_ID = NEXT VALUE FOR ven_ship_countby1 ;
+			
+			INSERT INTO VEND_SHIP("VEND_SHIP_ID","VENDOR_ID","S_M_ID")
+			VALUES(@VEND_SHIP_ID, @VENDOR_ID, @S_M_ID);
+
+			IF @S_M_ID = 1
+				SET @SHIPPED_DATE = DATEADD(day,3,@ORDER_DATE);
+
+			insert into prod_vend_ord("PV_ORD_ID", "ORDER_DATE", "EXPECTED_SHIP_DATE", "SHIPPED_DATE", "TOTAL_COST", "VENDOR_ID")
+			VALUES(@PV_ORD_ID , @ORDER_DATE, @EXPECTED_SHIP_DATE, @SHIPPED_DATE, @TOTAL_COST, @VENDOR_ID);
+
+			INSERT INTO PROD_VEND_OL("PV_OL_ID", "PRODUCT_ID", "PV_ORD_ID", "QTY")
+			VALUES(@PV_OL_ID, @PRODUCT_ID, @PV_OL_ID, @QTY);
+
+			DECLARE @QNTY NUMERIC(15);
+			SET @QNTY = (SELECT QOH FROM INVENTORY WHERE PRODUCT_ID = @PRODUCT_ID);
+			
+			update INVENTORY
+			SET QOH = @QNTY + @QTY
+			WHERE PRODUCT_ID = @PRODUCT_ID
+	       
+	   commit transaction;
+	END TRY
+	BEGIN CATCH
+	  DECLARE 	@ErrorNo 	int,
+   		        @Message	nvarchar(4000)
+     SELECT
+   	    @ErrorNo 	= ERROR_NUMBER(),
+   	    @Message 	= ERROR_MESSAGE()
+		RAISERROR (@Message, 16, 1);
+		rollback transaction;
+	END CATCH;
+END
+GO
+
+EXEC sp_prod_vend_ord
+    @ORDER_DATE = '07-MAY-03',
+    @EXPECTED_SHIP_DATE = '10-MAY-03',
+    @TOTAL_COST = '12000',
+    @VENDOR_ID = '3',
+    @PRODUCT_ID = '8',
+    @QTY = '200',
+    @S_M_ID = '1';
+
+
+/*4.1for each state (based on state customer address)  with more than one employee helping customers, list state, number of orders, 
+number of products ordered, total number of quantity ordered, and total sales*/
+
+select cus.STATE_PROVINCE, count(ord.order_id) totalorder,
+count(p.product_id) totalproduct, 
+count(ol.qty) totalqty,sum(CAST(ord.SUBTOTAL as decimal(10,4))) totalamount 
+from customer cus 
+inner join orders ord on ord.customer_id=cus.CUSTOMER_ID
+inner join order_line ol on ord.order_id=ol.order_ID
+inner join product p
+on p.product_id = ol.product_id group by cus.STATE_PROVINCE having count(employee_id)>1 order by totalamount;
+
+/*SAMPLE OUTPUT*/
+/*STATE_PROVINCE	totalorder	totalproduct	totalqty	totalamount
+WI					26			26				26			NULL
+MN					112			112				112			27999.0000
+NULL				2939		2939			2939		2991113.0000*/
+
+/*4.2for each month, List the customer number, customer last name, with the highest total number of orders. Order your result from JAN to DEC.*/
+
+select a.LNAME,b.totalorder,b.month, b.customer_id from
+((select customer_id,customer.LNAME from customer ) a
+ inner join
+(select count(Order_id) totalorder, datepart(month, ORDER_DATE) month,
+customer_id,rank()OVER(partition by datepart(month, ORDER_DATE) 
+order by count(Order_id) desc) rank
+from orders
+ group by datepart(month, ORDER_DATE), customer_id) b on a.customer_id=b.customer_id) 
+ where rank=1 order by totalorder desc;
+ 
+ /*SAMPLE OUTPUT*/
+ /*
+ LNAME	totalorder	month	customer_id
+Harris		75			5		39
+Stewart		69			1		94
+Constable	49			11		23
+Dunn		42			6		28
+Mudd		37			2		67
+Bullit		31			4		19
+George		31			10		32
+Stewart		29			12		94
+Heisler		25			9		40
+Jake		23			8		143
+Blazek-White 21			3		15
+George		14			7		133
+ */
+
+
+/* for each state (based on customer state) list top three employees. Your list should include employee  number, first name, last name,  and total sales. */
+(select b.employee_id,a.FNAME,a.LNAME,b.total,a.STREET,
+RANK() OVER ( partition by a.STREET ORDER BY b.total DESC) AS Top_Ranks
+ from 
+((select employee_id, employee.STREET, employee.LNAME, employee.FNAME from employee) a 
+inner join 
+(select employee_id,sum(CAST(SUBTOTAL as decimal(10,4))) total  
+from niraj.orders group by employee_id having sum(CAST(SUBTOTAL as decimal(10,4))) is not null 
+--order by sum(subtotal) desc
+) b on a.employee_id=b.employee_id))
+--where Top_Ranks <=3 order by total desc;
+
+/*SAMPLE OUTPUT*/
+/*employee_id	FNAME	LNAME		total		STREET	Top_Ranks
+	107			Peter	Norman		34490.0000				1
+	115			Robert 	Somers		33518.0000				2
+	122			Bruce	Wrightson	26096.0000				3
+	92			Doug	Johnston	15539.0000				4
+	89			Bruce	Jenkins		15409.0000				5
+	93			Sheela	Katz		15215.0000				6
+	90			Dusky	Jenkins		14052.0000				7
+	109			William C.	Pickle	11992.0000				8
+	96			John	Mayfield	10456.0000				9
+	101			Earl M.	Mudd		10102.0000				10
+*/
+
+
+/*List top 25% of product sold (based on total quantity sold). Your list should include product number, name, category, and total amount sold*/
+select b.qty, b.product_id, a.PRODUCT_NAME, a.CATEGORY_ID from
+((select product_id, PRODUCT_NAME, CATEGORY_ID from product ) a
+inner join 
+(select count(qty) qty,ol.product_id,rank() over(order by count(qty) desc) rank from order_line ol inner join product p
+on ol.product_id = p.product_id group by ol.PRODUCT_id) b 
+on a.product_id=b.product_id)
+where rank < (select count(*) from PRODUCT)*25/100; 
+
+/*OUTPUT*/
+qty	product_id	PRODUCT_NAME		CATEGORY_ID
+583		1		42 inch Plasma TV		1
+
+
+/*Develop a list to a follow up call one month after the order date for orders more than $1,000. 
+Your list should include the customer number and name, date of order, and date of follow up call*/
+
+select a.FNAME,a.LNAME, b.*, c.order_date,c.nextdate from
+((select order_id,order_date, dateadd(MONTH, 1, ORDER_DATE) nextdate from orders ) c
+inner join
+(select count(Order_id) totalorder, datepart(month, dateadd(MONTH, 1, ORDER_DATE)) month,
+sum(CAST(orders.SUBTOTAL as DECIMAL(10,0))) "totalamount" , order_id,customer_id
+from orders group by datepart(month, dateadd(MONTH, 1, ORDER_DATE)) ,order_id,customer_id having sum(CAST(orders.SUBTOTAL as DECIMAL(10,0)))>1000) b
+on c.order_id=b.order_id inner join
+(select customer_id,customer.FNAME,customer.LNAME from customer) a 
+ on a.customer_id=b.customer_id);
+ 
+ /*SAMPLE OUTPUT*/
+ /*
+ FNAME	LNAME	totalorder	month	totalamount	order_id	customer_id	order_date	nextdate
+Judy	Forman	1	4	155088	2224	31	2005-03-11	2005-04-11
+Judy	Forman	1	3	69211	2018	31	2005-02-02	2005-03-02
+Donald	Geriach	1	1	178877	1779	33	2004-12-25	2005-01-25
+Donald	Geriach	1	11	37422	2720	33	2004-10-26	2004-11-26
+Donald	Geriach	1	11	8168	2597	33	2004-10-11	2004-11-11
+Donald	Geriach	1	8	330020	286		33	2004-07-22	2004-08-22
+Donald	Geriach	1	10	34966	451		33	2004-09-02	2004-10-02
+Donald	Geriach	1	12	41580	1666	33	2004-11-12	2004-12-12
+Donald	Geriach	1	8	120751	211		33	2004-07-07	2004-08-07
+Donald	Geriach	1	10	79875	2502	33	2004-09-17	2004-10-17
+Donald	Geriach	1	9	192455	373		33	2004-08-12	2004-09-12
+Donald	Geriach	1	2	17820	1808	33	2005-01-01	2005-02-01
+Donald	Geriach	1	1	64750	1731	33	2004-12-12	2005-01-12
+ King	Haag	1	3	95750	2058	34	2005-02-09	2005-03-09
+ King	Haag	1	3	5523	2059	34	2005-02-09	2005-03-09
+ King	Haag	1	3	19400	2060	34	2005-02-09	2005-03-09
+ King	Haag	1	3	33000	2175	34	2005-02-25	2005-03-25
+ King	Haag	1	4	6600	2231	34	2005-03-12	2005-04-12
+ King	Haag	1	6	9700	2385	34	2005-05-04	2005-06-04
+ King	Haag	1	6	19400	2420	34	2005-05-12	2005-06-12
+ King	Haag	1	2	237000	1850	34	2005-01-09	2005-02-09
+ King	Haag	1	3	81800	2063	34	2005-02-09	2005-03-09
+ King	Haag	1	3	4600	2062	34	2005-02-09	2005-03-09
+ King	Haag	1	2	21000	1971	34	2005-01-25	2005-02-25
+ */

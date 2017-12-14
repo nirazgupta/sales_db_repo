@@ -1,0 +1,128 @@
+2.1	Using your database, list the position title and number of employees in each position title. You should get the following results
+POSITION Title COUNT
+
+--QUERY--
+select j.job_title, COUNT(e.employee_id) AS Num_of_Employees
+from niraj.employee e 
+join niraj.job_title j on j.job_title_id = e.job_title_id
+group by j.job_title
+
+--RESULT--
+job_title				Num_of_Employees
+Accountant					3
+Branch Manager				16
+CEO							1
+Customer Service			9
+Customer Service Manager	1
+Programmer					4
+Sales Manager				5
+Sales Representative		30
+Technician					1
+
+
+2.2	Using your database, for each customer list the following information.
+CUSTOMER_NO LNAME TOTAL_ORDERS TOTAL_PRODUCTS GROSS_SALES TOTAL_SHIPPING_COST TOTAL_TAX
+Let’s assume shipping charge is 2% of gross sales and tax is 7.5% of gross sale
+
+--QUERY--
+select ord.customer_id, c.LNAME,c.FNAME, COUNT(ord.order_ID), count(ol.product_id), ISNULL(ord.subtotal,0),
+ISNULL(ord.shipping_charge,0) AS TOTAL_SHIPPING, ISNULL((0.75 * ord.subtotal),0) as TAX
+from niraj.customer c join niraj.orders ord on c.customer_id = ord.customer_id
+join niraj.order_line ol on ord.order_id = ol.order_id
+group by ord.customer_id, c.Lname,c.FNAME, ord.subtotal, ord.shipping_charge
+order by SUBTOTAL desc;
+
+--SAMPLE RESULT--
+customer_id	LNAME	FNAME	(No column name)	(No column name)	(No column name)	TOTAL_SHIPPING	TAX
+33			Geriach	Donald		1					1					284500				28450		213375.00
+34			Haag	 King		1					1					222000				9000		166500.00
+33			Geriach	Donald		1					1					165120				16512		123840.00
+33			Geriach	Donald		1					1					156150				12492		117112.50
+31			Forman	Judy		1					1					155088					0		116316.00
+33			Geriach	Donald		1					1					103600				10360		77700.00
+35			Hagen	Sehwag		1					1					100000				2000		75000.00
+34			Haag	 King		1					1					95750					0		71812.50
+35			Hagen	Sehwag		1					1					92000				2000		69000.00
+35			Hagen	Sehwag		1					1					90000				2000		67500.00
+35			Hagen	Sehwag		2					2					82000				2000		61500.00
+34			Haag	 King		1					1					80000				3000		60000.00
+35			Hagen	Sehwag		1					1					80000				2600		60000.00
+33			Geriach	Donald		1					1					79875					0		59906.25
+
+2.3 Using your database, List customer number and their orders based on days of the week. You should get the following results
+    CUSTOMER_NO ORDER_NO gross_Sale
+--QUERY--
+select customer_id,order_id, ISNULL(TOTAL,0) AS GROSS_SALE,
+DATENAME(dw,order_date) AS DAY_OF_WEEK
+from niraj.orders 
+order by TOTAL desc;
+
+
+--SAMPLE RESULT--
+customer_id	order_id	GROSS_SALE	DAY_OF_WEEK
+33				286		330020		Thursday
+34				1850	237000		Sunday
+33				373		192455		Thursday
+33				1779	178877		Saturday
+31				2224	155088		Friday
+33				211		120751		Wednesday
+35				2661	102000		Friday
+35				2660	98400		Friday
+35				2659	97000		Friday
+34				2058	95750		Wednesday
+35				2671	89400		Friday
+35				2769	89400		Tuesday
+35				2672	89000		Friday
+34				169		83000		Monday
+
+
+
+2.4 Using your database, for every employee (employee number, first name, last name)
+list their total sales for each product that they have sold. You should get the following results
+
+EMPLOYEE_NO FNAME LNAME PRODUCT_NO PRODUCT_SOLD
+--QUERY--
+select ord.employee_id, e.fname, e.lname, p.product_id, p.product_name
+from niraj.orders ord join niraj.employee e on ord.employee_id = e.employee_id
+join niraj.order_line ol on ol.order_id = ord.order_id
+join niraj.product p on ol.product_id = p.product_id
+group by ord.employee_id, e.fname, e.lname, p.product_id, p.product_name;
+
+--SAMPLE RESULT--
+"EMPLOYEE_ID"                 "FNAME"                       "LNAME"                       "PRODUCT_ID"                  "PRODUCT_NAME"                
+1							Eugenia							Dunn								1						42 inch Plasma TV
+1							Eugenia							Dunn								2						42 inch Plasma TV
+1							Eugenia							Dunn								3						Mario Game for Xbox
+1							Eugenia							Dunn								4							Xbox
+1							Eugenia							Dunn								5						Xbox controller
+1							Eugenia							Dunn								6						Xbox Memeory Card
+1							Eugenia							Dunn								7						Xbox,2 controller, 1 Mario game,2 memory cards
+1							Eugenia							Dunn								8						Optical Desktop with Fingerprint Reader
+1							Eugenia							Dunn								9						Office Professional Edition 2003
+2							Steward							Stansbury							1						42 inch Plasma TV
+2							Steward							Stansbury							2						42 inch Plasma TV
+2							Steward							Stansbury							3						Mario Game for Xbox
+2							Steward							Stansbury							4							Xbox
+2							Steward							Stansbury							5						Xbox controller
+2							Steward							Stansbury							6						Xbox Memeory Card
+
+
+2.5 Using your database, for every state, select top customer
+number with the highest number of orders. You should get the following results
+CUSTOMER_NO COUNT_ORDERS State
+
+--QUERY--
+select ord.customer_id, count(ord.order_id) AS num_of_orders, c.state_province
+from niraj.orders ord join niraj.customer c on c.customer_id = ord.customer_id
+group by ord.customer_id, c.state_province
+having c.state_province IS NOT NULL
+order by count(ord.order_id) DESC;
+
+--RESULT--
+customer_id	num_of_orders	state_province
+20				50				MN
+8				40				MN
+14				26				WI
+
+
+
